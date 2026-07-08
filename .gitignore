@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+
+OUTPUT_DXF/
+LOGS/
+
+*.dxf
+*.bak
+*.log
+
+.vscode/
+.idea/
+
+Thumbs.db
