@@ -26,6 +26,15 @@ class Statistics:
     quads: int = 0
 
     # -------------------------------------------------------------
+    # Geometry Analysis
+    # -------------------------------------------------------------
+
+    circles_recognized: int = 0
+    arcs_recognized: int = 0
+    closed_loops: int = 0
+    symbols_recognized: int = 0
+
+    # -------------------------------------------------------------
     # DXF Output
     # -------------------------------------------------------------
 
@@ -92,6 +101,13 @@ class Statistics:
         print(f"Lines Found         : {self.lines:,}")
         print(f"Curves Found        : {self.curves:,}")
         print(f"Quads Found         : {self.quads:,}")
+
+        print()
+
+        print(f"Circles Recognized  : {self.circles_recognized:,}")
+        print(f"Arcs Recognized     : {self.arcs_recognized:,}")
+        print(f"Closed Loops        : {self.closed_loops:,}")
+        print(f"Symbols Recognized  : {self.symbols_recognized:,}")
 
         print()
 
