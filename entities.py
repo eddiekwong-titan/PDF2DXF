@@ -35,10 +35,20 @@ class LineEntity(Entity):
 
 @dataclass(slots=True)
 class CurveEntity(Entity):
-    start: tuple
-    control1: tuple
-    control2: tuple
-    end: tuple
+    """
+    Cubic Bezier curve extracted from a PDF drawing command.
+
+    Coordinates are converted from PDF space to DXF-oriented space during
+    extraction so downstream code never has to know about the PDF Y-axis.
+    Points are stored as primitive (x, y) tuples instead of PyMuPDF objects so
+    the internal geometry collections stay independent of the extraction
+    library.
+    """
+
+    start: tuple[float, float]
+    control1: tuple[float, float]
+    control2: tuple[float, float]
+    end: tuple[float, float]
 
 
 # ----------------------------------------------------------------------
@@ -47,7 +57,7 @@ class CurveEntity(Entity):
 
 @dataclass(slots=True)
 class QuadEntity(Entity):
-    points: tuple
+    points: tuple[tuple[float, float], ...]
 
 
 # ----------------------------------------------------------------------
