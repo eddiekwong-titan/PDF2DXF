@@ -1,6 +1,6 @@
 """
 converter.py
-Revision 3.3 PDF to DXF conversion logic.
+Revision 3.4 PDF to DXF conversion logic.
 
 This revision extracts LINE, CURVE, and QUAD entities from AutoCAD-generated
 vector PDFs and runs a geometry analysis stage before DXF output. Only LINE
@@ -167,7 +167,7 @@ class PDFConverter:
                 self.extract_entities(page)
 
         analyzer = GeometryAnalyzer()
-        analyzer.analyze(self.lines, self.curves, self.quads)
+        analyzer.analyze(self.lines, self.curves, self.quads, self.stats)
 
         self.write_lines()
         self.write_curves()

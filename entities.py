@@ -52,6 +52,20 @@ class CurveEntity(Entity):
 
 
 # ----------------------------------------------------------------------
+# Curve Group
+# ----------------------------------------------------------------------
+
+@dataclass(slots=True)
+class CurveGroup:
+    """Connected chain of Bezier curves prepared for future recognition."""
+
+    curves: list[CurveEntity]
+    closed: bool
+    start_point: tuple[float, float]
+    end_point: tuple[float, float]
+
+
+# ----------------------------------------------------------------------
 # Quad
 # ----------------------------------------------------------------------
 

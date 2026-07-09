@@ -26,6 +26,20 @@ def distance(x1, y1, x2, y2):
     return hypot(x2 - x1, y2 - y1)
 
 
+def point_distance(point1, point2):
+    """
+    Return the distance between two primitive (x, y) points.
+    """
+    return distance(point1[0], point1[1], point2[0], point2[1])
+
+
+def points_equal(point1, point2, tolerance=0.01):
+    """
+    Compare two primitive points using a configurable tolerance.
+    """
+    return point_distance(point1, point2) <= tolerance
+
+
 def line_length(line):
 
     return distance(
@@ -34,6 +48,20 @@ def line_length(line):
         line.x2,
         line.y2,
     )
+
+
+def curve_start(curve):
+    """
+    Return the primitive start point of a CurveEntity.
+    """
+    return curve.start
+
+
+def curve_end(curve):
+    """
+    Return the primitive end point of a CurveEntity.
+    """
+    return curve.end
 
 
 # ----------------------------------------------------------------------

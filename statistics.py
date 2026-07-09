@@ -33,6 +33,8 @@ class Statistics:
     arcs_recognized: int = 0
     closed_loops: int = 0
     symbols_recognized: int = 0
+    curve_groups: int = 0
+    closed_curve_groups: int = 0
 
     # -------------------------------------------------------------
     # DXF Output
@@ -108,6 +110,8 @@ class Statistics:
         print(f"Arcs Recognized     : {self.arcs_recognized:,}")
         print(f"Closed Loops        : {self.closed_loops:,}")
         print(f"Symbols Recognized  : {self.symbols_recognized:,}")
+        print(f"Curve Groups        : {self.curve_groups:,}")
+        print(f"Closed Curve Groups : {self.closed_curve_groups:,}")
 
         print()
 
