@@ -24,7 +24,7 @@ from entities import (
     PolylineEntity,
     QuadEntity,
 )
-from geometry import curve_end, curve_start, points_equal
+from geometry import curve_end, curve_start, point_distance, points_equal
 from statistics import Statistics
 
 
@@ -128,9 +128,55 @@ class GeometryAnalyzer:
 
         return self.curve_groups
 
-    def detect_circles(self) -> None:
-        """Future stage for recognizing circles from grouped Bezier curves."""
-        pass
+    def detect_circles(self, tolerance: float = 0.01) -> list[CircleEntity]:
+        """
+        Recognize AutoCAD-exported circles from closed four-curve groups.
+
+        This is not general circle fitting. AutoCAD exports native circles as
+        four cubic Bezier segments, so this detector only evaluates closed
+        CurveGroup objects with exactly four curves. Future revisions may add
+        broader support for arbitrary Bezier approximations.
+        """
+        self.circles.clear()
+        candidate_count = 0
+
+        for group in self.curve_groups:
+            if not group.closed or len(group.curves) != 4:
+                continue
+
+            candidate_count += 1
+            start_points = [curve_start(curve) for curve in group.curves]
+            center = (
+                sum(point[0] for point in start_points) / len(start_points),
+                sum(point[1] for point in start_points) / len(start_points),
+            )
+            radii = [point_distance(center, point) for point in start_points]
+            radius = sum(radii) / len(radii)
+            maximum_deviation = max(abs(value - radius) for value in radii)
+
+            if maximum_deviation > tolerance:
+                continue
+
+            self.circles.append(
+                CircleEntity(
+                    layer=group.curves[0].layer,
+                    center=center,
+                    radius=radius,
+                    source_group=group,
+                )
+            )
+
+        if self.stats is not None:
+            self.stats.circles_detected += len(self.circles)
+            self.stats.circles_recognized += len(self.circles)
+
+        print("Circle Candidates:")
+        print(candidate_count)
+        print()
+        print("Circles Recognized:")
+        print(len(self.circles))
+
+        return self.circles
 
     def detect_arcs(self) -> None:
         """Future stage for recognizing arcs from Bezier curve chains."""

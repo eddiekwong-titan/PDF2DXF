@@ -80,8 +80,17 @@ class QuadEntity(Entity):
 
 @dataclass(slots=True)
 class CircleEntity(Entity):
-    center: tuple
+    """
+    Circle recognized from an AutoCAD-generated four-curve Bezier group.
+
+    AutoCAD exports native circles as four cubic Bezier segments. The original
+    CurveGroup is retained so future revisions can replace or write native CAD
+    circle entities without losing the source curves.
+    """
+
+    center: tuple[float, float]
     radius: float
+    source_group: CurveGroup
 
 
 @dataclass(slots=True)

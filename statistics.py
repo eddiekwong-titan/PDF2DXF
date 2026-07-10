@@ -30,6 +30,7 @@ class Statistics:
     # -------------------------------------------------------------
 
     circles_recognized: int = 0
+    circles_detected: int = 0
     arcs_recognized: int = 0
     closed_loops: int = 0
     symbols_recognized: int = 0
@@ -107,6 +108,7 @@ class Statistics:
         print()
 
         print(f"Circles Recognized  : {self.circles_recognized:,}")
+        print(f"Circles Detected    : {self.circles_detected:,}")
         print(f"Arcs Recognized     : {self.arcs_recognized:,}")
         print(f"Closed Loops        : {self.closed_loops:,}")
         print(f"Symbols Recognized  : {self.symbols_recognized:,}")
