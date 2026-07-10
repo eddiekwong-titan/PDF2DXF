@@ -1,4 +1,6 @@
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 
 from analyzer import GeometryAnalyzer
 from entities import CurveEntity, CurveGroup
@@ -28,26 +30,32 @@ def group_from_points(points, closed=True):
 
 
 class CircleDetectionTests(unittest.TestCase):
-    def test_valid_four_curve_closed_group_is_recognized(self):
+    def detect(self, analyzer):
+        with redirect_stdout(StringIO()):
+            return analyzer.detect_circles()
+
+    def test_valid_autocad_circle_is_recognized(self):
         analyzer = GeometryAnalyzer()
         analyzer.curve_groups = [
             group_from_points([(1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0)])
         ]
 
-        circles = analyzer.detect_circles()
+        circles = self.detect(analyzer)
 
         self.assertEqual(len(circles), 1)
         self.assertEqual(circles[0].center, (0.0, 0.0))
         self.assertAlmostEqual(circles[0].radius, 1.0)
+        self.assertEqual(circles[0].radius_error, 0.0)
+        self.assertEqual(circles[0].confidence, 1.0)
         self.assertIs(circles[0].source_group, analyzer.curve_groups[0])
 
-    def test_three_curve_group_is_rejected(self):
+    def test_wrong_curve_count_is_rejected(self):
         analyzer = GeometryAnalyzer()
         analyzer.curve_groups = [
             group_from_points([(1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)])
         ]
 
-        circles = analyzer.detect_circles()
+        circles = self.detect(analyzer)
 
         self.assertEqual(circles, [])
 
@@ -60,7 +68,7 @@ class CircleDetectionTests(unittest.TestCase):
             )
         ]
 
-        circles = analyzer.detect_circles()
+        circles = self.detect(analyzer)
 
         self.assertEqual(circles, [])
 
@@ -70,7 +78,17 @@ class CircleDetectionTests(unittest.TestCase):
             group_from_points([(1.0, 0.0), (0.0, 2.0), (-1.0, 0.0), (0.0, -1.0)])
         ]
 
-        circles = analyzer.detect_circles()
+        circles = self.detect(analyzer)
+
+        self.assertEqual(circles, [])
+
+    def test_incorrect_diameter_is_rejected(self):
+        analyzer = GeometryAnalyzer()
+        analyzer.curve_groups = [
+            group_from_points([(1.0, 0.0), (0.0, 1.0), (0.0, -1.0), (-1.0, 0.0)])
+        ]
+
+        circles = self.detect(analyzer)
 
         self.assertEqual(circles, [])
 

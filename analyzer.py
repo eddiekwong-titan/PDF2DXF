@@ -139,44 +139,135 @@ class GeometryAnalyzer:
         """
         self.circles.clear()
         candidate_count = 0
+        rejected_count = 0
 
         for group in self.curve_groups:
             if not group.closed or len(group.curves) != 4:
                 continue
 
             candidate_count += 1
-            start_points = [curve_start(curve) for curve in group.curves]
-            center = (
-                sum(point[0] for point in start_points) / len(start_points),
-                sum(point[1] for point in start_points) / len(start_points),
-            )
-            radii = [point_distance(center, point) for point in start_points]
-            radius = sum(radii) / len(radii)
-            maximum_deviation = max(abs(value - radius) for value in radii)
+            circle_geometry = self._validate_circle_geometry(group, tolerance)
 
-            if maximum_deviation > tolerance:
+            if circle_geometry is None:
+                rejected_count += 1
                 continue
 
+            center, radius, radius_error = circle_geometry
             self.circles.append(
-                CircleEntity(
-                    layer=group.curves[0].layer,
-                    center=center,
-                    radius=radius,
-                    source_group=group,
-                )
+                self._create_circle_entity(group, center, radius, radius_error)
             )
 
         if self.stats is not None:
+            self.stats.circle_candidates += candidate_count
+            self.stats.circle_accepted += len(self.circles)
+            self.stats.circle_rejected += rejected_count
             self.stats.circles_detected += len(self.circles)
             self.stats.circles_recognized += len(self.circles)
 
         print("Circle Candidates:")
         print(candidate_count)
         print()
-        print("Circles Recognized:")
+        print("Accepted:")
         print(len(self.circles))
+        print()
+        print("Rejected:")
+        print(rejected_count)
 
         return self.circles
+
+    def _estimate_circle_center(
+        self,
+        start_points: list[tuple[float, float]],
+    ) -> tuple[float, float]:
+        """
+        Estimate center from opposite AutoCAD circle segment start points.
+
+        For AutoCAD-exported circles, the four cubic Bezier segment starts are
+        ordered around the circle. Opposite starts form diameters, so averaging
+        midpoint(P1, P3) and midpoint(P2, P4) is more stable than averaging all
+        four points when export noise shifts individual points slightly.
+        """
+        first_midpoint = (
+            (start_points[0][0] + start_points[2][0]) / 2,
+            (start_points[0][1] + start_points[2][1]) / 2,
+        )
+        second_midpoint = (
+            (start_points[1][0] + start_points[3][0]) / 2,
+            (start_points[1][1] + start_points[3][1]) / 2,
+        )
+        return (
+            (first_midpoint[0] + second_midpoint[0]) / 2,
+            (first_midpoint[1] + second_midpoint[1]) / 2,
+        )
+
+    def _compute_circle_radius(
+        self,
+        center: tuple[float, float],
+        start_points: list[tuple[float, float]],
+    ) -> tuple[float, float, float, float]:
+        """Return average, minimum, maximum, and maximum radius deviation."""
+        radii = [point_distance(center, point) for point in start_points]
+        average_radius = sum(radii) / len(radii)
+        minimum_radius = min(radii)
+        maximum_radius = max(radii)
+        maximum_deviation = max(abs(value - average_radius) for value in radii)
+
+        return average_radius, minimum_radius, maximum_radius, maximum_deviation
+
+    def _validate_circle_geometry(
+        self,
+        group: CurveGroup,
+        tolerance: float,
+    ) -> tuple[tuple[float, float], float, float] | None:
+        """
+        Validate radii and opposite diameters for an AutoCAD circle candidate.
+
+        Opposite-point checks reduce false positives because four points can
+        have similar radii without representing AutoCAD's four ordered circle
+        segments. Native AutoCAD circles export as four cubic Beziers, so P1/P3
+        and P2/P4 should each span one diameter.
+        """
+        start_points = [curve_start(curve) for curve in group.curves]
+        center = self._estimate_circle_center(start_points)
+        (
+            average_radius,
+            minimum_radius,
+            maximum_radius,
+            maximum_deviation,
+        ) = self._compute_circle_radius(center, start_points)
+
+        if maximum_deviation > tolerance:
+            return None
+
+        expected_diameter = 2 * average_radius
+        first_diameter = point_distance(start_points[0], start_points[2])
+        second_diameter = point_distance(start_points[1], start_points[3])
+
+        if abs(first_diameter - expected_diameter) > tolerance:
+            return None
+        if abs(second_diameter - expected_diameter) > tolerance:
+            return None
+        if abs(first_diameter - second_diameter) > tolerance:
+            return None
+
+        return center, average_radius, maximum_radius - minimum_radius
+
+    def _create_circle_entity(
+        self,
+        group: CurveGroup,
+        center: tuple[float, float],
+        radius: float,
+        radius_error: float,
+    ) -> CircleEntity:
+        """Create a CircleEntity while preserving the source CurveGroup."""
+        return CircleEntity(
+            layer=group.curves[0].layer,
+            center=center,
+            radius=radius,
+            source_group=group,
+            radius_error=radius_error,
+            confidence=1.0,
+        )
 
     def detect_arcs(self) -> None:
         """Future stage for recognizing arcs from Bezier curve chains."""

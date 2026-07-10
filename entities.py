@@ -91,6 +91,8 @@ class CircleEntity(Entity):
     center: tuple[float, float]
     radius: float
     source_group: CurveGroup
+    radius_error: float = 0.0
+    confidence: float = 1.0
 
 
 @dataclass(slots=True)
