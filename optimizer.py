@@ -12,17 +12,21 @@ because exported PDF coordinates are approximate.
 
 from __future__ import annotations
 
-from time import perf_counter
-
+from config import (
+    ENABLE_DUPLICATE_REMOVAL,
+    ENABLE_LINE_MERGING,
+    ZERO_LENGTH_TOLERANCE,
+)
 from entities import CurveEntity, LineEntity, QuadEntity
 from geometry import line_length, point_distance, points_equal
 from statistics import Statistics
+from timer import Timer
 
 
 class GeometryOptimizer:
     """Clean extracted geometry before DXF writing."""
 
-    def __init__(self, tolerance: float = 0.001) -> None:
+    def __init__(self, tolerance: float = ZERO_LENGTH_TOLERANCE) -> None:
         self.tolerance = tolerance
         self.lines: list[LineEntity] = []
         self.curves: list[CurveEntity] = []
@@ -52,22 +56,24 @@ class GeometryOptimizer:
         self.stats = stats
         self.original_line_count = len(lines)
 
-        total_start = perf_counter()
-        zero_length_start = perf_counter()
-        self.remove_zero_length_lines()
-        self.zero_length_time = perf_counter() - zero_length_start
+        with Timer("Geometry Optimization") as total_timer:
+            with Timer("Zero Length Removal") as zero_length_timer:
+                self.remove_zero_length_lines()
+            self.zero_length_time = zero_length_timer.elapsed
 
-        duplicate_start = perf_counter()
-        self.remove_duplicate_lines()
-        self.duplicate_time = perf_counter() - duplicate_start
+            if ENABLE_DUPLICATE_REMOVAL:
+                with Timer("Duplicate Removal") as duplicate_timer:
+                    self.remove_duplicate_lines()
+                self.duplicate_time = duplicate_timer.elapsed
 
-        merge_start = perf_counter()
-        self.merge_collinear_lines()
-        self.merge_time = perf_counter() - merge_start
-        self.total_optimize_time = perf_counter() - total_start
+            if ENABLE_LINE_MERGING:
+                with Timer("Line Merging") as merge_timer:
+                    self.merge_collinear_lines()
+                self.merge_time = merge_timer.elapsed
+
+        self.total_optimize_time = total_timer.elapsed
 
         self._update_statistics()
-        self._print_report()
 
         return self.lines
 
@@ -245,31 +251,6 @@ class GeometryOptimizer:
     def _line_end(self, line: LineEntity) -> tuple[float, float]:
         return (line.x2, line.y2)
 
-    def _lines_duplicate(
-        self,
-        first_line: LineEntity,
-        second_line: LineEntity,
-        tolerance: float,
-    ) -> bool:
-        if first_line.layer != second_line.layer:
-            return False
-
-        first_start = self._line_start(first_line)
-        first_end = self._line_end(first_line)
-        second_start = self._line_start(second_line)
-        second_end = self._line_end(second_line)
-
-        same_direction = (
-            points_equal(first_start, second_start, tolerance)
-            and points_equal(first_end, second_end, tolerance)
-        )
-        reversed_direction = (
-            points_equal(first_start, second_end, tolerance)
-            and points_equal(first_end, second_start, tolerance)
-        )
-
-        return same_direction or reversed_direction
-
     def _can_merge(
         self,
         first_line: LineEntity,
@@ -377,29 +358,7 @@ class GeometryOptimizer:
         self.stats.removed_short_lines += self.zero_length_removed
         self.stats.duplicate_lines += self.duplicates_removed
         self.stats.merged_lines += self.lines_merged
-
-    def _print_report(self) -> None:
-        print("Optimizer")
-        print("-------------------------")
-        print("Original Lines:")
-        print(self.original_line_count)
-        print()
-        print("Zero-Length Removed:")
-        print(self.zero_length_removed)
-        print()
-        print("Duplicates Removed:")
-        print(self.duplicates_removed)
-        print()
-        print("Merged Lines:")
-        print(self.lines_merged)
-        print()
-        print("Final Lines:")
-        print(len(self.lines))
-        print()
-        print("Optimizer Timing")
-        print("-------------------------")
-        print(f"Zero Length Removal : {self.zero_length_time:.2f} sec")
-        print(f"Duplicate Removal   : {self.duplicate_time:.2f} sec")
-        print(f"Merge Passes        : {self.merge_passes}")
-        print(f"Merge Time          : {self.merge_time:.2f} sec")
-        print(f"Total Optimize Time : {self.total_optimize_time:.2f} sec")
+        self.stats.optimizer_zero_length_time += self.zero_length_time
+        self.stats.optimizer_duplicate_time += self.duplicate_time
+        self.stats.optimizer_merge_time += self.merge_time
+        self.stats.optimizer_merge_passes += self.merge_passes

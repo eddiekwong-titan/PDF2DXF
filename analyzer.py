@@ -15,6 +15,12 @@ curve chains instead of isolated Bezier segments.
 
 from __future__ import annotations
 
+from config import (
+    ENABLE_ARC_DETECTION,
+    ENABLE_CIRCLE_DETECTION,
+    ENABLE_SYMBOL_DETECTION,
+    RADIUS_TOLERANCE,
+)
 from entities import (
     ArcEntity,
     CircleEntity,
@@ -62,11 +68,17 @@ class GeometryAnalyzer:
         self.stats = stats
 
         self.group_connected_curves()
-        self.detect_circles()
-        self.detect_arcs()
+
+        if ENABLE_CIRCLE_DETECTION:
+            self.detect_circles()
+        if ENABLE_ARC_DETECTION:
+            self.detect_arcs()
+
         self.detect_closed_loops()
         self.detect_rectangles()
-        self.detect_symbols()
+
+        if ENABLE_SYMBOL_DETECTION:
+            self.detect_symbols()
 
     def group_connected_curves(self) -> list[CurveGroup]:
         """Group CurveEntity objects whose end/start points touch."""
@@ -120,15 +132,9 @@ class GeometryAnalyzer:
             self.stats.curve_groups += len(self.curve_groups)
             self.stats.closed_curve_groups += closed_groups
 
-        print("Curve Groups:")
-        print(len(self.curve_groups))
-        print()
-        print("Closed Groups:")
-        print(closed_groups)
-
         return self.curve_groups
 
-    def detect_circles(self, tolerance: float = 0.01) -> list[CircleEntity]:
+    def detect_circles(self, tolerance: float = RADIUS_TOLERANCE) -> list[CircleEntity]:
         """
         Recognize AutoCAD-exported circles from closed four-curve groups.
 
@@ -163,15 +169,6 @@ class GeometryAnalyzer:
             self.stats.circle_rejected += rejected_count
             self.stats.circles_detected += len(self.circles)
             self.stats.circles_recognized += len(self.circles)
-
-        print("Circle Candidates:")
-        print(candidate_count)
-        print()
-        print("Accepted:")
-        print(len(self.circles))
-        print()
-        print("Rejected:")
-        print(rejected_count)
 
         return self.circles
 

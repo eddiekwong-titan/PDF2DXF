@@ -1,6 +1,6 @@
 """
 converter.py
-Revision 3.7 PDF to DXF conversion logic.
+Revision 3.8 PDF to DXF conversion logic.
 
 This revision extracts LINE, CURVE, and QUAD entities from AutoCAD-generated
 vector PDFs, runs geometry analysis, and optimizes linework before DXF output.
@@ -16,11 +16,19 @@ import ezdxf
 import fitz
 
 from analyzer import GeometryAnalyzer
-from config import DXF_VERSION, INPUT_FOLDER, OUTPUT_FOLDER
+from config import (
+    DXF_VERSION,
+    ENABLE_OPTIMIZER,
+    INPUT_FOLDER,
+    OUTPUT_FOLDER,
+    WRITE_CURVES,
+    WRITE_QUADS,
+)
 from entities import CurveEntity, LineEntity, QuadEntity
 from geometry import flip_y
 from optimizer import GeometryOptimizer
 from statistics import Statistics
+from timer import Timer
 
 
 class PDFConverter:
@@ -132,11 +140,13 @@ class PDFConverter:
 
     def write_curves(self) -> None:
         """Placeholder for future DXF curve output."""
-        print("Curve writing not implemented.")
+        if not WRITE_CURVES:
+            return
 
     def write_quads(self) -> None:
         """Placeholder for future DXF quad output."""
-        print("Quad writing not implemented.")
+        if not WRITE_QUADS:
+            return
 
     def save(self, filename: Path | str) -> None:
         """Save the current DXF document."""
@@ -160,35 +170,44 @@ class PDFConverter:
             else OUTPUT_FOLDER / f"{pdf_path.stem}.dxf"
         )
 
-        self.reset_entities()
-        self.create_dxf()
+        with Timer("Total", self.stats, "total_time"):
+            self.reset_entities()
+            self.create_dxf()
 
-        with fitz.open(pdf_path) as pdf:
-            for page in pdf:
-                self.extract_entities(page)
+            with Timer("Entity Extraction", self.stats, "extraction_time"):
+                with fitz.open(pdf_path) as pdf:
+                    for page in pdf:
+                        self.extract_entities(page)
 
-        analyzer = GeometryAnalyzer()
-        analyzer.analyze(self.lines, self.curves, self.quads, self.stats)
+            analyzer = GeometryAnalyzer()
+            with Timer("Geometry Analysis", self.stats, "analysis_time"):
+                analyzer.analyze(self.lines, self.curves, self.quads, self.stats)
 
-        optimizer = GeometryOptimizer()
-        self.lines = optimizer.optimize(self.lines, self.curves, self.quads, self.stats)
+            if ENABLE_OPTIMIZER:
+                optimizer = GeometryOptimizer()
+                with Timer("Geometry Optimization", self.stats, "optimization_time"):
+                    self.lines = optimizer.optimize(
+                        self.lines,
+                        self.curves,
+                        self.quads,
+                        self.stats,
+                    )
 
-        self.write_lines()
-        self.write_curves()
-        self.write_quads()
-        self.save(dxf_path)
-        self.stats.pdfs += 1
+            with Timer("DXF Writing", self.stats, "dxf_writing_time"):
+                self.write_lines()
+                self.write_curves()
+                self.write_quads()
+                self.save(dxf_path)
+
+            self.stats.pdfs += 1
 
         return dxf_path
 
     def convert_folder(self) -> None:
         """Convert every PDF in the configured input folder."""
-        self.stats.start()
-
         pdf_files = sorted(INPUT_FOLDER.glob("*.pdf"))
         for pdf_path in pdf_files:
             output_path = OUTPUT_FOLDER / f"{pdf_path.stem}.dxf"
             self.convert_pdf(pdf_path, output_path)
 
-        self.stats.stop()
         self.stats.report()

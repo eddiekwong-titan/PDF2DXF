@@ -27,14 +27,41 @@ LOG_FOLDER.mkdir(exist_ok=True)
 DXF_VERSION = "R2018"
 
 # ----------------------------------------------------------------------
+# Geometry Tolerances
+# ----------------------------------------------------------------------
+
+POINT_TOLERANCE = 0.01
+ZERO_LENGTH_TOLERANCE = 0.001
+RADIUS_TOLERANCE = 0.01
+COLLINEAR_TOLERANCE = 0.001
+
+# ----------------------------------------------------------------------
 # Geometry Settings
 # ----------------------------------------------------------------------
 
-MIN_LINE_LENGTH = 0.001
 BEZIER_SEGMENTS = 24
 
 # ----------------------------------------------------------------------
-# Debug
+# Optimizer
 # ----------------------------------------------------------------------
 
-DEBUG = True
+ENABLE_OPTIMIZER = True
+ENABLE_DUPLICATE_REMOVAL = True
+ENABLE_LINE_MERGING = True
+
+# ----------------------------------------------------------------------
+# Analysis
+# ----------------------------------------------------------------------
+
+ENABLE_CIRCLE_DETECTION = True
+ENABLE_ARC_DETECTION = False
+ENABLE_SYMBOL_DETECTION = False
+
+# ----------------------------------------------------------------------
+# Output
+# ----------------------------------------------------------------------
+
+WRITE_CURVES = False
+WRITE_QUADS = False
+VERBOSE = True
+DEBUG = False

@@ -5,6 +5,8 @@ Geometry helper functions for PDF2DXF.
 
 from math import hypot, atan2, degrees
 
+from config import COLLINEAR_TOLERANCE, POINT_TOLERANCE, ZERO_LENGTH_TOLERANCE
+
 
 # ----------------------------------------------------------------------
 # Coordinate Conversion
@@ -33,7 +35,7 @@ def point_distance(point1, point2):
     return distance(point1[0], point1[1], point2[0], point2[1])
 
 
-def points_equal(point1, point2, tolerance=0.01):
+def points_equal(point1, point2, tolerance=POINT_TOLERANCE):
     """
     Compare two primitive points using a configurable tolerance.
     """
@@ -87,7 +89,7 @@ def line_angle(line):
 # Tests
 # ----------------------------------------------------------------------
 
-def is_zero_length(line, tolerance=0.001):
+def is_zero_length(line, tolerance=ZERO_LENGTH_TOLERANCE):
 
     return line_length(line) < tolerance
 
@@ -107,14 +109,14 @@ def midpoint(line):
 # Future Geometry
 # ----------------------------------------------------------------------
 
-def is_parallel(line1, line2, tolerance=0.01):
+def is_parallel(line1, line2, tolerance=COLLINEAR_TOLERANCE):
     """
     Placeholder
     """
     return False
 
 
-def is_collinear(line1, line2, tolerance=0.01):
+def is_collinear(line1, line2, tolerance=COLLINEAR_TOLERANCE):
     """
     Placeholder
     """
