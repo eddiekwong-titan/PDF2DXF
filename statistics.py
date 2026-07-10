@@ -55,6 +55,9 @@ class Statistics:
     duplicate_lines: int = 0
     merged_lines: int = 0
     removed_short_lines: int = 0
+    zero_length_removed: int = 0
+    duplicate_lines_removed: int = 0
+    lines_merged: int = 0
 
     # -------------------------------------------------------------
     # Layers
@@ -129,9 +132,9 @@ class Statistics:
 
         print()
 
-        print(f"Duplicate Lines     : {self.duplicate_lines:,}")
-        print(f"Merged Lines        : {self.merged_lines:,}")
-        print(f"Short Lines Removed : {self.removed_short_lines:,}")
+        print(f"Zero-Length Removed : {self.zero_length_removed:,}")
+        print(f"Duplicate Lines Removed : {self.duplicate_lines_removed:,}")
+        print(f"Lines Merged        : {self.lines_merged:,}")
 
         print()
 
