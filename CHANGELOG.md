@@ -1,5 +1,13 @@
 # Changelog
 
+## Version 4.0.0
+
+- Added native DXF `CIRCLE` output for validated `CircleEntity` objects.
+- Preserved recognized circle layer, center, and radius in DXF output.
+- Added writer-side circle validation before DXF emission.
+- Added DXF inspection tests using ezdxf.
+- Updated documentation for supported `LINE` and `CIRCLE` output.
+
 ## Revision 3.8
 
 - Centralized tolerances, feature flags, and output options in `config.py`.

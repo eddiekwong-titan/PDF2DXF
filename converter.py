@@ -1,14 +1,15 @@
 """
 converter.py
-Revision 3.8 PDF to DXF conversion logic.
+Revision 4.0.0 PDF to DXF conversion logic.
 
 This revision extracts LINE, CURVE, and QUAD entities from AutoCAD-generated
-vector PDFs, runs geometry analysis, and optimizes linework before DXF output.
-Only LINE entities are written to DXF output.
+vector PDFs, runs geometry analysis, optimizes linework, and writes native DXF
+LINE and CIRCLE entities.
 """
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +25,7 @@ from config import (
     WRITE_CURVES,
     WRITE_QUADS,
 )
-from entities import CurveEntity, LineEntity, QuadEntity
+from entities import CircleEntity, CurveEntity, LineEntity, QuadEntity
 from geometry import flip_y
 from optimizer import GeometryOptimizer
 from statistics import Statistics
@@ -39,6 +40,7 @@ class PDFConverter:
         self.lines: list[LineEntity] = []
         self.curves: list[CurveEntity] = []
         self.quads: list[QuadEntity] = []
+        self.circles: list[CircleEntity] = []
         self.doc: Any | None = None
         self.msp: Any | None = None
 
@@ -47,6 +49,7 @@ class PDFConverter:
         self.lines.clear()
         self.curves.clear()
         self.quads.clear()
+        self.circles.clear()
 
     @staticmethod
     def point_tuple(point: Any, page_height: float) -> tuple[float, float]:
@@ -129,7 +132,12 @@ class PDFConverter:
         if self.msp is None:
             raise RuntimeError("DXF modelspace has not been created.")
 
+        suppressed_line_ids = self._suppressed_line_ids()
+
         for line in self.lines:
+            if id(line) in suppressed_line_ids:
+                continue
+
             self.ensure_layer(line.layer)
             self.msp.add_line(
                 (line.x1, line.y1),
@@ -137,6 +145,24 @@ class PDFConverter:
                 dxfattribs={"layer": line.layer},
             )
             self.stats.dxf_lines += 1
+
+    def write_circles(self) -> None:
+        """Write recognized circles as native DXF CIRCLE entities."""
+        if self.msp is None:
+            raise RuntimeError("DXF modelspace has not been created.")
+
+        for circle in self.circles:
+            if not self._valid_circle(circle):
+                self.stats.circle_rejected += 1
+                continue
+
+            layer = self.ensure_layer(circle.layer)
+            self.msp.add_circle(
+                center=circle.center,
+                radius=circle.radius,
+                dxfattribs={"layer": layer},
+            )
+            self.stats.dxf_circles += 1
 
     def write_curves(self) -> None:
         """Placeholder for future DXF curve output."""
@@ -147,6 +173,37 @@ class PDFConverter:
         """Placeholder for future DXF quad output."""
         if not WRITE_QUADS:
             return
+
+    def _suppressed_line_ids(self) -> set[int]:
+        """
+        Return source LineEntity ids already represented by native entities.
+
+        Current circle recognition is sourced from CurveEntity groups, so this
+        is usually empty. Keeping the writer-side suppression hook here lets
+        future native entities suppress their exact source geometry without
+        moving write decisions into the analyzer.
+        """
+        suppressed_ids: set[int] = set()
+
+        for circle in self.circles:
+            for source_entity in circle.source_group.curves:
+                if isinstance(source_entity, LineEntity):
+                    suppressed_ids.add(id(source_entity))
+
+        return suppressed_ids
+
+    def _valid_circle(self, circle: CircleEntity) -> bool:
+        """Validate a recognized circle before writing it to DXF."""
+        center_x, center_y = circle.center
+
+        return (
+            circle.layer is not None
+            and circle.layer != ""
+            and circle.radius > 0
+            and math.isfinite(circle.radius)
+            and math.isfinite(center_x)
+            and math.isfinite(center_y)
+        )
 
     def save(self, filename: Path | str) -> None:
         """Save the current DXF document."""
@@ -182,6 +239,7 @@ class PDFConverter:
             analyzer = GeometryAnalyzer()
             with Timer("Geometry Analysis", self.stats, "analysis_time"):
                 analyzer.analyze(self.lines, self.curves, self.quads, self.stats)
+            self.circles = analyzer.circles
 
             if ENABLE_OPTIMIZER:
                 optimizer = GeometryOptimizer()
@@ -195,6 +253,7 @@ class PDFConverter:
 
             with Timer("DXF Writing", self.stats, "dxf_writing_time"):
                 self.write_lines()
+                self.write_circles()
                 self.write_curves()
                 self.write_quads()
                 self.save(dxf_path)

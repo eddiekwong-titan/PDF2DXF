@@ -4,7 +4,7 @@ PDF2DXF converts AutoCAD-generated vector PDFs into DXF files for CAD review and
 
 ## Project Overview
 
-The project extracts primitive vector geometry from PDFs, analyzes higher-level CAD intent, optimizes linework, and writes DXF output. Current production output is intentionally conservative: only `LINE` entities are written to DXF.
+The project extracts primitive vector geometry from PDFs, analyzes higher-level CAD intent, optimizes linework, and writes DXF output. Version 4.0.0 introduces the first native intelligent CAD output: recognized AutoCAD circles are written as editable DXF `CIRCLE` entities.
 
 ## Architecture
 
@@ -30,11 +30,17 @@ Shared modules:
 - Batch conversion from `INPUT_PDFS/` to `OUTPUT_DXF/`
 - CAD layer preservation
 - Line extraction and DXF `LINE` writing
+- Native DXF `CIRCLE` writing for recognized AutoCAD circles
 - Curve and quad extraction into internal dataclasses
 - Curve grouping for analysis
-- AutoCAD four-Bezier circle recognition, stored internally only
+- AutoCAD four-Bezier circle recognition
 - Line optimizer for zero-length removal, duplicate removal, and collinear merging
 - Conversion summary with stage timing
+
+## Supported DXF Entities
+
+- `LINE`
+- `CIRCLE`
 
 ## Supported PDF Types
 
@@ -42,7 +48,7 @@ PDF2DXF is designed for AutoCAD-generated vector PDFs. Raster PDFs, scanned draw
 
 ## Known Limitations
 
-- Circles, arcs, curves, quads, text, hatches, and symbols are not written to DXF yet.
+- Arcs, curves, quads, text, hatches, and symbols are not written to DXF yet.
 - Circle recognition targets AutoCAD's four cubic Bezier circle export pattern.
 - Optimizer tolerances are configurable, but aggressive values can alter linework.
 - PDF layer data depends on how the source PDF was exported.
@@ -61,7 +67,6 @@ Use `benchmarks/benchmark.py` to compare future revisions on the same input PDFs
 
 ## Roadmap
 
-- Native DXF circle writing
 - Arc recognition and DXF arc writing
 - Polyline generation from closed loops
 - Symbol recognition
