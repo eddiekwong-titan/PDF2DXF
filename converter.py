@@ -1,6 +1,6 @@
 """
 converter.py
-Revision 4.0.0 PDF to DXF conversion logic.
+Revision 4.0.1 PDF to DXF conversion logic.
 
 This revision extracts LINE, CURVE, and QUAD entities from AutoCAD-generated
 vector PDFs, runs geometry analysis, optimizes linework, and writes native DXF
@@ -33,7 +33,7 @@ from timer import Timer
 
 
 class PDFConverter:
-    """Convert vector PDF linework into DXF LINE entities."""
+    """Convert vector PDF geometry into DXF entities."""
 
     def __init__(self) -> None:
         self.stats = Statistics()
@@ -127,15 +127,15 @@ class PDFConverter:
                     )
                     self.stats.quads += 1
 
-    def write_lines(self) -> None:
-        """Write extracted lines to the current DXF modelspace."""
+    def write_line_entities(self) -> None:
+        """Write project line entities to the DXF modelspace."""
         if self.msp is None:
             raise RuntimeError("DXF modelspace has not been created.")
 
-        suppressed_line_ids = self._suppressed_line_ids()
+        suppressed_entity_ids = self._suppressed_entity_ids()
 
         for line in self.lines:
-            if id(line) in suppressed_line_ids:
+            if id(line) in suppressed_entity_ids:
                 continue
 
             self.ensure_layer(line.layer)
@@ -146,8 +146,8 @@ class PDFConverter:
             )
             self.stats.dxf_lines += 1
 
-    def write_circles(self) -> None:
-        """Write recognized circles as native DXF CIRCLE entities."""
+    def write_circle_entities(self) -> None:
+        """Write project circle entities to the DXF modelspace."""
         if self.msp is None:
             raise RuntimeError("DXF modelspace has not been created.")
 
@@ -164,24 +164,25 @@ class PDFConverter:
             )
             self.stats.dxf_circles += 1
 
-    def write_curves(self) -> None:
-        """Placeholder for future DXF curve output."""
+    def write_curve_entities(self) -> None:
+        """Write project curve entities to the DXF modelspace when enabled."""
         if not WRITE_CURVES:
             return
 
-    def write_quads(self) -> None:
-        """Placeholder for future DXF quad output."""
+    def write_quad_entities(self) -> None:
+        """Write project quad entities to the DXF modelspace when enabled."""
         if not WRITE_QUADS:
             return
 
-    def _suppressed_line_ids(self) -> set[int]:
+    def _suppressed_entity_ids(self) -> set[int]:
         """
-        Return source LineEntity ids already represented by native entities.
+        Return source entity ids that should not be emitted directly.
 
-        Current circle recognition is sourced from CurveEntity groups, so this
-        is usually empty. Keeping the writer-side suppression hook here lets
-        future native entities suppress their exact source geometry without
-        moving write decisions into the analyzer.
+        Source entities represented by higher-level CAD entities are suppressed
+        by the writer, not the analyzer. Currently this collection is usually
+        empty because CurveEntity objects are not written to DXF. Future
+        versions will suppress CurveEntity, ArcEntity, PolylineEntity,
+        SplineEntity, and other source geometry through this same mechanism.
         """
         suppressed_ids: set[int] = set()
 
@@ -252,10 +253,10 @@ class PDFConverter:
                     )
 
             with Timer("DXF Writing", self.stats, "dxf_writing_time"):
-                self.write_lines()
-                self.write_circles()
-                self.write_curves()
-                self.write_quads()
+                self.write_line_entities()
+                self.write_circle_entities()
+                self.write_curve_entities()
+                self.write_quad_entities()
                 self.save(dxf_path)
 
             self.stats.pdfs += 1

@@ -144,9 +144,9 @@ class CircleDetectionTests(unittest.TestCase):
         converter.create_dxf()
         converter.curves = group.curves
         converter.circles = circles
-        converter.write_lines()
-        converter.write_circles()
-        converter.write_curves()
+        converter.write_line_entities()
+        converter.write_circle_entities()
+        converter.write_curve_entities()
 
         with TemporaryDirectory() as temp_dir:
             output_path = Path(temp_dir) / "circle.dxf"
