@@ -12,6 +12,8 @@ because exported PDF coordinates are approximate.
 
 from __future__ import annotations
 
+from time import perf_counter
+
 from entities import CurveEntity, LineEntity, QuadEntity
 from geometry import line_length, point_distance, points_equal
 from statistics import Statistics
@@ -30,6 +32,11 @@ class GeometryOptimizer:
         self.zero_length_removed = 0
         self.duplicates_removed = 0
         self.lines_merged = 0
+        self.zero_length_time = 0.0
+        self.duplicate_time = 0.0
+        self.merge_time = 0.0
+        self.total_optimize_time = 0.0
+        self.merge_passes = 0
 
     def optimize(
         self,
@@ -45,9 +52,20 @@ class GeometryOptimizer:
         self.stats = stats
         self.original_line_count = len(lines)
 
+        total_start = perf_counter()
+        zero_length_start = perf_counter()
         self.remove_zero_length_lines()
+        self.zero_length_time = perf_counter() - zero_length_start
+
+        duplicate_start = perf_counter()
         self.remove_duplicate_lines()
+        self.duplicate_time = perf_counter() - duplicate_start
+
+        merge_start = perf_counter()
         self.merge_collinear_lines()
+        self.merge_time = perf_counter() - merge_start
+        self.total_optimize_time = perf_counter() - total_start
+
         self._update_statistics()
         self._print_report()
 
@@ -64,46 +82,162 @@ class GeometryOptimizer:
         return self.lines
 
     def remove_duplicate_lines(self, tolerance: float | None = None) -> list[LineEntity]:
-        """Remove duplicate and reversed-duplicate line segments."""
+        """Remove duplicate and reversed-duplicate line segments in one pass."""
         tolerance = self.tolerance if tolerance is None else tolerance
+        seen_keys: set[
+            tuple[
+                str,
+                tuple[int, int],
+                tuple[int, int],
+            ]
+        ] = set()
         unique_lines: list[LineEntity] = []
 
         for line in self.lines:
-            if any(self._lines_duplicate(line, existing, tolerance) for existing in unique_lines):
+            key = self._line_duplicate_key(line, tolerance)
+
+            if key in seen_keys:
                 self.duplicates_removed += 1
                 continue
 
+            seen_keys.add(key)
             unique_lines.append(line)
 
         self.lines = unique_lines
         return self.lines
 
     def merge_collinear_lines(self, tolerance: float | None = None) -> list[LineEntity]:
-        """Repeatedly merge same-layer collinear lines that share an endpoint."""
-        tolerance = self.tolerance if tolerance is None else tolerance
-        changed = True
+        """
+        Repeatedly merge indexed endpoint neighbors that satisfy merge rules.
 
-        while changed:
-            changed = False
+        Endpoint indexing dramatically reduces comparisons by checking only
+        lines that share quantized endpoint buckets instead of scanning every
+        other line. The index is rebuilt after each merge pass because merged
+        lines have new endpoints. Quantized endpoint keys avoid fragile raw
+        floating-point dictionary keys while final merge checks still use the
+        configured geometry tolerance.
+        """
+        tolerance = self.tolerance if tolerance is None else tolerance
+        self.merge_passes = 0
+
+        while True:
+            self.merge_passes += 1
+            endpoint_index = self._build_endpoint_index(tolerance)
+            removed_indices: set[int] = set()
+            pass_merged = 0
 
             for first_index, first_line in enumerate(self.lines):
-                for second_index in range(first_index + 1, len(self.lines)):
+                if first_index in removed_indices:
+                    continue
+
+                for second_index in self._candidate_line_indices(
+                    first_index,
+                    first_line,
+                    endpoint_index,
+                    tolerance,
+                ):
+                    if second_index in removed_indices:
+                        continue
+                    if second_index == first_index:
+                        continue
+
                     second_line = self.lines[second_index]
 
                     if not self._can_merge(first_line, second_line, tolerance):
                         continue
 
                     merged_line = self._merge_lines(first_line, second_line)
-                    self.lines[first_index] = merged_line
-                    del self.lines[second_index]
-                    self.lines_merged += 1
-                    changed = True
-                    break
+                    if line_length(merged_line) < tolerance:
+                        continue
 
-                if changed:
-                    break
+                    self.lines[first_index] = merged_line
+                    first_line = merged_line
+                    removed_indices.add(second_index)
+                    self.lines_merged += 1
+                    pass_merged += 1
+
+            if removed_indices:
+                self.lines = [
+                    line
+                    for line_index, line in enumerate(self.lines)
+                    if line_index not in removed_indices
+                ]
+
+            if pass_merged == 0:
+                break
 
         return self.lines
+
+    def _build_endpoint_index(
+        self,
+        tolerance: float,
+    ) -> dict[tuple[int, int], list[tuple[int, bool]]]:
+        index: dict[tuple[int, int], list[tuple[int, bool]]] = {}
+
+        for line_index, line in enumerate(self.lines):
+            if line_length(line) < tolerance:
+                continue
+
+            for is_start, point in (
+                (True, self._line_start(line)),
+                (False, self._line_end(line)),
+            ):
+                index.setdefault(self._endpoint_key(point, tolerance), []).append(
+                    (line_index, is_start)
+                )
+
+        return index
+
+    def _endpoint_key(
+        self,
+        point: tuple[float, float],
+        tolerance: float,
+    ) -> tuple[int, int]:
+        return (
+            round(point[0] / tolerance),
+            round(point[1] / tolerance),
+        )
+
+    def _line_duplicate_key(
+        self,
+        line: LineEntity,
+        tolerance: float,
+    ) -> tuple[str, tuple[int, int], tuple[int, int]]:
+        first_key = self._endpoint_key(self._line_start(line), tolerance)
+        second_key = self._endpoint_key(self._line_end(line), tolerance)
+        normalized_start, normalized_end = sorted((first_key, second_key))
+
+        return (line.layer, normalized_start, normalized_end)
+
+    def _candidate_line_indices(
+        self,
+        line_index: int,
+        line: LineEntity,
+        endpoint_index: dict[tuple[int, int], list[tuple[int, bool]]],
+        tolerance: float,
+    ) -> list[int]:
+        candidates: set[int] = set()
+
+        for point in (self._line_start(line), self._line_end(line)):
+            endpoint_key = self._endpoint_key(point, tolerance)
+
+            for neighbor_key in self._neighbor_endpoint_keys(endpoint_key):
+                for candidate_index, _is_start in endpoint_index.get(neighbor_key, []):
+                    if candidate_index != line_index:
+                        candidates.add(candidate_index)
+
+        return sorted(candidates)
+
+    def _neighbor_endpoint_keys(
+        self,
+        endpoint_key: tuple[int, int],
+    ) -> list[tuple[int, int]]:
+        key_x, key_y = endpoint_key
+        return [
+            (key_x + offset_x, key_y + offset_y)
+            for offset_x in (-1, 0, 1)
+            for offset_y in (-1, 0, 1)
+        ]
 
     def _line_start(self, line: LineEntity) -> tuple[float, float]:
         return (line.x1, line.y1)
@@ -143,6 +277,9 @@ class GeometryOptimizer:
         tolerance: float,
     ) -> bool:
         if first_line.layer != second_line.layer:
+            return False
+
+        if line_length(first_line) < tolerance or line_length(second_line) < tolerance:
             return False
 
         if not self._share_endpoint(first_line, second_line, tolerance):
@@ -258,3 +395,11 @@ class GeometryOptimizer:
         print()
         print("Final Lines:")
         print(len(self.lines))
+        print()
+        print("Optimizer Timing")
+        print("-------------------------")
+        print(f"Zero Length Removal : {self.zero_length_time:.2f} sec")
+        print(f"Duplicate Removal   : {self.duplicate_time:.2f} sec")
+        print(f"Merge Passes        : {self.merge_passes}")
+        print(f"Merge Time          : {self.merge_time:.2f} sec")
+        print(f"Total Optimize Time : {self.total_optimize_time:.2f} sec")

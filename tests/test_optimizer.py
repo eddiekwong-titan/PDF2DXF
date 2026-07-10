@@ -54,6 +54,20 @@ class GeometryOptimizerTests(unittest.TestCase):
 
         self.assertEqual(len(optimized), 1)
 
+    def test_quantized_duplicate_removal(self):
+        lines = [
+            line((0.0, 0.0), (1.0, 0.0)),
+            line((0.0002, 0.0), (1.0002, 0.0)),
+        ]
+        optimizer = GeometryOptimizer()
+
+        with redirect_stdout(StringIO()):
+            optimizer.lines = lines
+            optimized = optimizer.remove_duplicate_lines()
+
+        self.assertEqual(len(optimized), 1)
+        self.assertEqual(optimizer.duplicates_removed, 1)
+
     def test_simple_collinear_merge(self):
         lines = [
             line((0.0, 0.0), (1.0, 0.0)),
@@ -85,6 +99,22 @@ class GeometryOptimizerTests(unittest.TestCase):
         optimized = optimize(lines)
 
         self.assertEqual(len(optimized), 2)
+
+    def test_endpoint_index_rebuild_allows_followup_merge(self):
+        lines = [
+            line((0.0, 0.0), (1.0, 0.0)),
+            line((1.0, 0.0), (2.0, 0.0)),
+            line((2.0, 0.0), (3.0, 0.0)),
+        ]
+        optimizer = GeometryOptimizer()
+
+        with redirect_stdout(StringIO()):
+            optimized = optimizer.optimize(lines, [], [])
+
+        self.assertEqual(len(optimized), 1)
+        self.assertEqual((optimized[0].x1, optimized[0].y1), (0.0, 0.0))
+        self.assertEqual((optimized[0].x2, optimized[0].y2), (3.0, 0.0))
+        self.assertGreaterEqual(optimizer.merge_passes, 2)
 
 
 if __name__ == "__main__":
